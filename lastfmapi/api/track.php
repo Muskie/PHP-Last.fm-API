@@ -372,6 +372,90 @@ class lastfmApiTrack extends lastfmApi {
 		}
 	}
 	
+	
+	/**
+	 * This returns links where you can buy a copy of the track online.  You have the option of using the artist name AND the track name, or the 
+	 * MusicBrainz ID.  We will return an array as that is the pattern established.  Last.fm's API is capeable of returning XML.
+	 *
+	 * Even though it says it is optional you appear to need to submit a country!
+	 * 
+	 * @return array
+	 */
+	public function getBuyLinks($methodVars)
+	{
+		if( (( ! empty($methodVars['artist'])) && ( ! empty($methodVars['track']))) || ( ! empty($methodVars['mbid'])) )
+		{
+			if ( ! empty($methodVars['country']))
+			{
+				$ourCountry = $methodVars['country']; // do I even need to do this?
+			}
+			else
+			{
+				$ourCountry = "United Kingdom";  // This default should be set somewhere!
+			}
+			$vars = array(
+						'method' => 'track.getbuylinks',
+						'country' => $ourCountry,
+						'api_key' => $this->auth->apiKey
+						);
+			$vars = array_merge($vars, $methodVars);
+			if ( $response = $this->apiGetCall($vars) ) 
+			{
+				// Now we have a SimpleXML object, which I'm fine with, perhaps in the future we set a flag to return this rather than an array
+				if ( count($response->affiliations) > 0 ) 
+				{
+					// There are two types of affliations physicals and downloads, we might as well return them all
+					if( ! empty($methodVars['mbid']))
+					{
+						$buyLinks['mbid'] = $methodVars['mbid'];
+					}
+					else
+					{
+						$buyLinks['artist'] = $methodVars['artist'];
+						$buyLinks['track'] = $methodVars['track'];
+					}
+					// I'm a method should have one return statement kinda guy, but...
+					$i = 0;
+					foreach ( $response->affiliations->physicals->affiliation as $physical ) 
+					{
+						$buyLinks['physicals'][$i]['supplierName'] = (string) $physical->supplierName;
+						$buyLinks['physicals'][$i]['buyLink'] = (string) $physical->buyLink;
+						$buyLinks['physicals'][$i]['supplierIcon'] = (string) $physical->supplierIcon;
+						$buyLinks['physicals'][$i]['isSearch'] = (boolean) $physical->isSearch;
+						$i++;
+					}
+					$n = 0;
+					foreach ( $response->affiliations->downloads->affiliation as $download ) 
+					{
+						$buyLinks['downloads'][$n]['supplierName'] = (string) $download->supplierName;
+						$buyLinks['downloads'][$n]['buyLink'] = (string) $download->buyLink;
+						$buyLinks['downloads'][$n]['supplierIcon'] = (string) $download->supplierIcon;
+						$buyLinks['downloads'][$n]['isSearch'] = (boolean) $download->isSearch;
+						$n++;
+					}
+					return $buyLinks;
+				}
+				else 
+				{
+					$this->handleError(90, 'This track has no buy links');
+					return FALSE;
+				}
+			}
+			else 
+			{
+				return FALSE;
+			}
+		}
+		else
+		{
+			// Give a 91 error if incorrect variables are used
+			$this->handleError(91, 'You must include either artist and track, or MusicBrainz ID.');
+			return FALSE;
+		}
+	}
+	
+	
+	
 	/**
 	 * Love a track for a user profile. This needs to be supplemented with a scrobbling submission containing the 'love' rating (see the audioscrobbler API) (Requires full auth)
 	 * @param array $methodVars An array with the following required values: <i>artist</i>, <i>track</i>
