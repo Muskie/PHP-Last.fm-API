@@ -101,7 +101,8 @@ class lastfmApiAlbum extends lastfmApi {
 	 * @param array $methodVars An array with the following required values: <i>album</i> and optional values: <i>artist</i>, <i>mbid</i>
 	 * @return array
 	 */
-	public function getInfo($methodVars) {
+	public function getInfo($methodVars) 
+	{
 		// Set the call variables
 		$vars = array(
 			'method' => 'album.getinfo',
@@ -110,7 +111,8 @@ class lastfmApiAlbum extends lastfmApi {
 		$vars = array_merge($vars, $methodVars);
 		
 		$info = array();
-		if ( $call = $this->apiGetCall($vars) ) {
+		if ($call = $this->apiGetCall($vars)) 
+		{
 			$info['name'] = (string) $call->album->name;
 			$info['artist'] = (string) $call->album->artist;
 			$info['lastfmid'] = (string) $call->album->id;
@@ -122,17 +124,33 @@ class lastfmApiAlbum extends lastfmApi {
 			$info['image']['large'] = (string) $call->album->image[2];
 			$info['listeners'] = (string) $call->album->listeners;
 			$info['playcount'] = (string) $call->album->playcount;
-			$i = 0;
-			foreach ( $call->album->toptags->tag as $tags ) {
-				$info['toptags'][$i]['name'] = (string) $tags->name;
-				$info['toptags'][$i]['url'] = (string) $tags->url;
-				$i++;
+			
+			if ( ! empty($call->album->toptags))
+			{
+				$i = 0;
+				foreach ( $call->album->toptags->tag as $tags ) 
+				{
+					$info['toptags'][$i]['name'] = (string) $tags->name;
+					$info['toptags'][$i]['url'] = (string) $tags->url;
+					$i++;
+				}
+			}
+	
+			if ( ! empty($call->album->tracks))
+			{
+				for( $n = 0 ; $n < count($call->album->tracks->track); $n++)
+				{
+					// This is identical to how tags is done...
+					$info['tracks'][$n]['name'] = (string) $call->album->tracks->track[$n]->name;
+					$info['tracks'][$n]['url'] = (string) $call->album->tracks->track[$n]->url;
+				}
 			}
 			
 			return $info;
 		}
-		else {
-			return FALSE;
+		else 
+		{
+			return FALSE;  // I also don't like multiple returns.  If I work on Matt's code much more I'm going to do some major refactoring.
 		}
 	}
 	
@@ -189,6 +207,89 @@ class lastfmApiAlbum extends lastfmApi {
 		else {
 			// Give a 92 error if not fully authed
 			$this->handleError(92, 'Method requires full auth. Call auth.getSession using lastfmApiAuth class');
+			return FALSE;
+		}
+	}
+	
+	
+	/**
+	 * This returns links where you can buy a copy of the album online.  You have the option of using the artist name AND the album name, or the 
+	 * MusicBrainz ID.  We will return an array as that is the pattern established.  Last.fm's API is capeable of returning XML.
+	 *
+	 * Even though it says it is optional you appear to need to submit a country!
+	 * 
+	 * @return array
+	 */
+	public function getBuyLinks($methodVars)
+	{
+		if( (( ! empty($methodVars['artist'])) && ( ! empty($methodVars['album']))) || ( ! empty($methodVars['mbid'])) )
+		{
+			// Not sure if Album requires country, the documentation says it is optional...
+			if ( ! empty($methodVars['country']))
+			{
+				$ourCountry = $methodVars['country']; // do I even need to do this?
+			}
+			else
+			{
+				$ourCountry = "United Kingdom";  // This default should be set somewhere!
+			}
+			$vars = array(
+						'method' => 'album.getbuylinks',
+						'country' => $ourCountry,
+						'api_key' => $this->auth->apiKey
+						);
+			$vars = array_merge($vars, $methodVars);
+			if ( $response = $this->apiGetCall($vars) ) 
+			{
+				// Now we have a SimpleXML object, which I'm fine with, perhaps in the future we set a flag to return this rather than an array
+				if ( count($response->affiliations) > 0 ) 
+				{
+					// There are two types of affliations physicals and downloads, we might as well return them all
+					if( ! empty($methodVars['mbid']))
+					{
+						$buyLinks['mbid'] = $methodVars['mbid'];
+					}
+					else
+					{
+						$buyLinks['artist'] = $methodVars['artist'];
+						$buyLinks['album'] = $methodVars['album'];
+					}
+					// I'm a method should have one return statement kinda guy, but...
+					$i = 0;
+					foreach ( $response->affiliations->physicals->affiliation as $physical ) 
+					{
+						$buyLinks['physicals'][$i]['supplierName'] = (string) $physical->supplierName;
+						$buyLinks['physicals'][$i]['buyLink'] = (string) $physical->buyLink;
+						$buyLinks['physicals'][$i]['supplierIcon'] = (string) $physical->supplierIcon;
+						$buyLinks['physicals'][$i]['isSearch'] = (boolean) $physical->isSearch;
+						$i++;
+					}
+					$n = 0;
+					foreach ( $response->affiliations->downloads->affiliation as $download ) 
+					{
+						$buyLinks['downloads'][$n]['supplierName'] = (string) $download->supplierName;
+						$buyLinks['downloads'][$n]['buyLink'] = (string) $download->buyLink;
+						$buyLinks['downloads'][$n]['supplierIcon'] = (string) $download->supplierIcon;
+						$buyLinks['downloads'][$n]['isSearch'] = (boolean) $download->isSearch;
+						$n++;
+					}
+					return $buyLinks;
+				}
+				else 
+				{
+					$this->handleError(90, 'This album has no buy links');
+					return FALSE;
+				}
+			}
+			else 
+			{
+				return FALSE;
+			}
+		}
+		else
+		{
+			// Give a 91 error if incorrect variables are used
+			$this->handleError(91, 'You must include either artist and album, or MusicBrainz ID.');
 			return FALSE;
 		}
 	}
