@@ -235,8 +235,16 @@ class lastfmApiArtist extends lastfmApi {
 			$info['image']['medium'] = (string) $call->artist->image[1];
 			$info['image']['large'] = (string) $call->artist->image[2];
 			$info['streamable'] = (string) $call->artist->streamable;
-			$info['stats']['listeners'] = (string) $call->artist->stats->listeners;
-			$info['stats']['playcount'] = (string) $call->artist->stats->playcount;
+			// after here it throws exception quite often...
+			if ($call->artist->stats != null)
+			{
+				// This throwing an exception for Tom Wilson's Planet Love album...
+				$info['stats']['listeners'] = (string) $call->artist->stats->listeners;
+			}
+			if ($call->artist->stats->plays != null)
+			{
+				$info['stats']['playcount'] = (string) $call->artist->stats->plays;
+			}
 			$i = 0;
 			foreach ( $call->artist->similar->artist as $artist ) {
 				$info['similar'][$i]['name'] = (string) $artist->name;
